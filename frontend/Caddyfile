@@ -1,0 +1,20 @@
+{$DOMAIN} {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy backend:4000
+	}
+
+	handle /admin/queues* {
+		basic_auth {
+			{$BULL_BOARD_USER} {$BULL_BOARD_PASSWORD_HASH}
+		}
+		reverse_proxy backend:4000
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

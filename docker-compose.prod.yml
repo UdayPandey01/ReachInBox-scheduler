@@ -1,0 +1,67 @@
+services:
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      BULL_BOARD_USER: ${BULL_BOARD_USER}
+      BULL_BOARD_PASSWORD_HASH: ${BULL_BOARD_PASSWORD_HASH}
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - backend
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: ./backend/.env.production
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+    depends_on:
+      redis:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: ./backend
+      target: build
+    env_file: ./backend/.env.production
+    command: npx drizzle-kit migrate
+    profiles:
+      - tools
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.2
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  caddy-data:
+  caddy-config:
+  redis-data:
+  elasticsearch-data:
