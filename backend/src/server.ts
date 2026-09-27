@@ -1,20 +1,18 @@
 import {app} from "./app";
 import { env } from "./config/env";
-import { redis } from "./config/redis";
-import {db} from "./config/db";
 import "./workers/email.worker";
 import { recoverScheduledEmails } from "./queue/recovery";
+import { createEmailIndex } from "./config/elasticsearch";
+import { emailSearchService } from "./modules/search/emailSearch.service";
 
 async function startServer() {
-    const result = await db.execute(`SELECT NOW()`);
-    console.log("PostgreSQL:", result);
-
-    await redis.set("test", "Hello, Redis!");
-
-    const value = await redis.get("test");
-    console.log("Redis test value:", value);
-
     await recoverScheduledEmails();
+
+    const indexCreated = await createEmailIndex();
+
+    if (indexCreated) {
+        await emailSearchService.reindexAllEmails();
+    }
 
     app.listen(env.PORT, () => {
         console.log(`Server is running on port ${env.PORT}`);
@@ -23,6 +21,5 @@ async function startServer() {
 
 startServer().catch((err) => {
     console.error("Error starting server:", err);
+    process.exit(1);
 });
-
-
