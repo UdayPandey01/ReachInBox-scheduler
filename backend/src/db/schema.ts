@@ -10,7 +10,6 @@ import {
   jsonb,
   uniqueIndex,
   index,
-  bigint,
 } from "drizzle-orm/pg-core";
 
 export const campaignStatusEnum = pgEnum("campaign_status", [
@@ -38,6 +37,8 @@ export const emailEventTypeEnum = pgEnum("email_event_type", [
   "rescheduled",
   "canceled",
 ]);
+
+export type EmailStatus = (typeof emailStatusEnum.enumValues)[number];
 
 export type EmailEventType =
   (typeof emailEventTypeEnum.enumValues)[number];
