@@ -1,37 +1,35 @@
-import { emailQueue } from "./emailQueue";
+import { emailQueue, sendEmailJobOptions } from "./emailQueue";
 import {emailsRepository} from "../modules/emails/emails.repository";
 
 export async function recoverScheduledEmails() {
-    const scheduledEmails = await emailsRepository.findScheduledEmails();
+    const emailsToRecover = await emailsRepository.findEmailsToRecover();
 
-    console.log(`Found ${scheduledEmails.length} scheduled emails to recover.`);
+    let recoveredCount = 0;
 
-    for(const email of scheduledEmails) {
-        const jobId = email.bullJobId || `email-${email.id}`;
+    for(const email of emailsToRecover) {
+        const jobId = `email-${email.id}`;
         const existingJob = await emailQueue.getJob(jobId);
 
         if(existingJob) {
-            console.log(`Job for scheduled email ${email.id} already exists with jobId ${jobId}. Skipping recovery.`);
             continue;
         }
 
         const delay = Math.max(0, email.scheduledAt.getTime() - Date.now());
+
         await emailQueue.add("send-email", {
             emailId: email.id,
         }, {
+            ...sendEmailJobOptions,
             jobId,
             delay,
-            attempts: 3,
-            backoff: {
-                type: "exponential",
-                delay: 5000,
-            },
         })
 
         if(!email.bullJobId) {
             await emailsRepository.updateBullJobId(email.id, jobId);
-
-            console.log(`Recovered scheduled email ${email.id} with jobId ${jobId} and delay ${delay}ms.`);
         }
+
+        recoveredCount++;
     }
+
+    console.log(`Recovery: ${emailsToRecover.length} pending emails, ${recoveredCount} missing jobs recreated.`);
 }

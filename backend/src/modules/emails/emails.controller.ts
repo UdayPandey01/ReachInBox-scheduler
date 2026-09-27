@@ -1,29 +1,51 @@
-import {
-  Request,
-  Response,
-  NextFunction,
-} from "express";
-
-import { scheduledEmailSchema } from "./emails.schema";
+import type { Request, Response } from "express";
+import { z } from "zod";
+import type { EmailStatus } from "../../db/schema";
+import { HttpError } from "../../middleware/errorHandler";
+import { listEmailsQuerySchema, scheduledEmailSchema } from "./emails.schema";
 import { emailsService } from "./emails.service";
+import { emailsRepository } from "./emails.repository";
 
-const DEV_USER_ID = "95536b28-94bd-49ba-a62a-70ac8e00c2bd";
+export async function scheduleEmail(req: Request, res: Response) {
+  const input = scheduledEmailSchema.parse(req.body);
 
-export async function scheduleEmail(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const input = scheduledEmailSchema.parse(req.body);
+  const result = await emailsService.scheduleEmail(input, req.userId);
 
-    const result = await emailsService.scheduleEmail(
-      input,
-      DEV_USER_ID,
-    );
+  res.status(201).json(result);
+}
 
-    res.status(201).json(result);
-  } catch (error) {
-    next(error);
+async function listEmails(req: Request, res: Response, tabStatuses: EmailStatus[]) {
+  const query = listEmailsQuerySchema.parse(req.query);
+
+  const statuses =
+    query.status && tabStatuses.includes(query.status) ? [query.status] : tabStatuses;
+
+  const result = await emailsRepository.listUserEmails(
+    req.userId,
+    statuses,
+    query.page,
+    query.limit,
+  );
+
+  res.json(result);
+}
+
+export function listScheduledEmails(req: Request, res: Response) {
+  return listEmails(req, res, ["scheduled", "processing"]);
+}
+
+export function listSentEmails(req: Request, res: Response) {
+  return listEmails(req, res, ["sent", "failed"]);
+}
+
+export async function getEmail(req: Request, res: Response) {
+  const emailId = z.uuid().parse(req.params.id);
+
+  const email = await emailsRepository.findUserEmail(req.userId, emailId);
+
+  if (!email) {
+    throw new HttpError(404, "Email not found");
   }
+
+  res.json({ email });
 }

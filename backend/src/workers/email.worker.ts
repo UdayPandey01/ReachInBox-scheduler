@@ -5,13 +5,34 @@ import {getEtherealTransporter} from "../smtp/ethereal";
 import nodemailer from "nodemailer";
 import {checkAndConsumeRateLimit} from "../queue/rateLimiter";
 import { env } from "../config/env";
+import { slackRepository } from "../modules/slack/slack.repository";
+import { slackService } from "../modules/slack/slack.service";
+import { emailSearchService } from "../modules/search/emailSearch.service";
+
+async function notifySlackAboutRateLimit(
+    userId: string,
+    data: { campaignId: string; hourlyLimit: number; sentThisHour: number; retryAt: Date },
+) {
+    try {
+        const slackConnection = await slackRepository.findActiveConnection(userId);
+
+        if (!slackConnection?.channelId) {
+            return;
+        }
+
+        await slackService.sendRateLimitNotification(
+            slackConnection.accessToken,
+            slackConnection.channelId,
+            data,
+        );
+    } catch (error) {
+        console.error("Failed to send Slack rate-limit notification:", error);
+    }
+}
 
 const worker = new Worker(
   "email-queue",
   async (job) => {
-    console.log("Processing job:", job.id);
-    console.log("Job data:", job.data);
-
     const email = await emailsRepository.findEmailById(job.data.emailId);
 
     if(!email){
@@ -19,7 +40,6 @@ const worker = new Worker(
     }
 
     if (email.status === "sent") {
-        console.log("Email already sent. Skipping.");
         return;
     }
 
@@ -37,61 +57,50 @@ const worker = new Worker(
 
     const rateLimit = await checkAndConsumeRateLimit(campaign.id, campaign.hourlyLimit);
 
-    if (!rateLimit.allowed) {
-        console.log(`Rate limit reached for campaign ${campaign.id}.`);
-        console.log(`Rescheduling job ${job.id} for ${rateLimit.retryAt?.toISOString()}`);
+    if (!rateLimit.allowed && rateLimit.retryAt) {
+        const retryAt = rateLimit.retryAt;
 
         await emailsRepository.createEmailEvent(
             email.id,
             "rescheduled",
             "Email rescheduled because hourly rate limit was reached",
             {
-                retryAt: rateLimit.retryAt?.toISOString(),
+                retryAt: retryAt.toISOString(),
                 hourlyLimit: campaign.hourlyLimit,
             }
         )
 
-        if (rateLimit.retryAt) {
-            await emailsRepository.markEmailRescheduled(
-                email.id,
-            );
+        await notifySlackAboutRateLimit(campaign.userId, {
+            campaignId: campaign.id,
+            hourlyLimit: campaign.hourlyLimit,
+            sentThisHour: rateLimit.count,
+            retryAt,
+        });
 
-            await job.moveToDelayed(
-                rateLimit.retryAt.getTime(),
-                job.token,
-            );
+        await emailsRepository.markEmailRescheduled(email.id, retryAt);
 
-            throw new DelayedError();
-        }
+        await emailSearchService.updateEmail({
+            id: email.id,
+            status: email.status,
+            scheduledAt: retryAt,
+        });
 
+        await job.moveToDelayed(retryAt.getTime(), job.token);
+
+        throw new DelayedError();
     }
-
-
-    console.log("Email fetched from database:");
-    console.log({
-        id: email.id,
-        recipient: email.recipient,
-        subject: email.subject,
-        status: email.status,
-    });
 
     const currentAttempts = email.attempts + 1;
 
     await emailsRepository.updateEmailAttempts(email.id, currentAttempts);
 
-    const processingEmail = await emailsRepository.markEmailProcessing(email.id);
+    await emailsRepository.markEmailProcessing(email.id);
 
     await emailsRepository.createEmailEvent(
         email.id,
         "processing",
         `Email processing started - attempt ${currentAttempts}`,
     );
-
-    console.log("Email marked as processing:", {
-        id: processingEmail.id,
-        status: processingEmail.status,
-        attempts: processingEmail.attempts,
-    });
 
     const sender = await emailsRepository.findSenderById(
         email.senderId,
@@ -113,10 +122,18 @@ const worker = new Worker(
         text: email.body,
     })
 
+    const previewUrl = nodemailer.getTestMessageUrl(info) || null;
+
     const sentEmail = await emailsRepository.markEmailSent(
         email.id,
         info.messageId,
     );
+
+    await emailSearchService.updateEmail({
+        id: sentEmail.id,
+        status: sentEmail.status,
+        sentAt: sentEmail.sentAt,
+    });
 
     await emailsRepository.incrementCampaignSent(
         email.campaignId,
@@ -132,15 +149,11 @@ const worker = new Worker(
         "Email sent successfully",
         {
             messageId: info.messageId,
+            previewUrl,
         },
     )
 
-    console.log("Email sent:", {
-        messageId: info.messageId,
-        recipient: sentEmail.recipient,
-    });
-
-    console.log("Preview URL:",nodemailer.getTestMessageUrl(info),);
+    console.log(`Email ${email.id} sent to ${email.recipient}. Preview: ${previewUrl}`);
     } catch (error) {
         const errorMessage =
             error instanceof Error ? error.message : String(error);
@@ -165,22 +178,17 @@ const worker = new Worker(
             errorMessage,
             );
 
+            await emailSearchService.updateEmail({
+                id: email.id,
+                status: "failed",
+            });
+
             await emailsRepository.incrementCampaignFailed(
                 email.campaignId,
             );
 
             await emailsRepository.completeCampaignIfFinished(
                 email.campaignId,
-            );
-
-            console.error(
-            `Email permanently failed after ${currentAttempt} attempts:`,
-            errorMessage,
-            );
-        } else {
-            console.error(
-            `Email attempt ${currentAttempt} failed. BullMQ will retry:`,
-            errorMessage,
             );
         }
 
@@ -193,20 +201,14 @@ const worker = new Worker(
   },
 );
 
-worker.on("ready", () => {
-  console.log("BullMQ worker is ready");
-});
-
-worker.on("completed", (job) => {
-  console.log(`Job ${job.id} completed`);
-});
-
 worker.on("failed", (job, error) => {
-  console.error(`Job ${job?.id} failed:`, error);
+  if (error instanceof DelayedError) {
+    return;
+  }
+
+  console.error(`Job ${job?.id} failed:`, error.message);
 });
 
 worker.on("error", (error) => {
   console.error("Worker error:", error);
 });
-
-console.log("Email worker started");

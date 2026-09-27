@@ -1,8 +1,9 @@
+import crypto from "crypto";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../config/db";
 import { campaigns, emailEvents, emails, senders } from "../../db/schema";
 import type { ScheduleEmailInput } from "./emails.schema";
-import { eq, sql } from "drizzle-orm";
-import type { EmailEventType } from "../../db/schema";
+import type { EmailEventType, EmailStatus } from "../../db/schema";
 
 export class EmailsRepository {
     async createScheduledEmail(input: ScheduleEmailInput, userId: string) {
@@ -23,7 +24,12 @@ export class EmailsRepository {
             })
             .returning();
 
-        const emailValues = input.recipients.map((recipient, index) => ({
+        const emailValues = input.recipients.map((recipient, index) => {
+            const id = crypto.randomUUID();
+
+            return {
+            id,
+            bullJobId: `email-${id}`,
             campaignId: campaign.id,
             senderId: input.senderId,
             recipient: recipient,
@@ -34,20 +40,21 @@ export class EmailsRepository {
             ),
 
             status: "scheduled" as const,
-        }));
+            };
+        });
 
         const emailsInserted = await tx
             .insert(emails)
             .values(emailValues)
             .returning();
 
-        for (const email of emailsInserted) {
-            await tx.insert(emailEvents).values({
+        await tx.insert(emailEvents).values(
+            emailsInserted.map((email) => ({
             emailId: email.id,
-            eventType: "scheduled",
+            eventType: "scheduled" as const,
             message: "Email scheduled",
-            });
-        }
+            })),
+        );
 
         return {
             campaign,
@@ -172,10 +179,11 @@ export class EmailsRepository {
         return campaign;
     }
 
-    async markEmailRescheduled(emailId: string) {
+    async markEmailRescheduled(emailId: string, retryAt: Date) {
         const [email] = await db
             .update(emails)
             .set({
+            scheduledAt: retryAt,
             rescheduleCount: sql`${emails.rescheduleCount} + 1`,
             lastRescheduledAt: new Date(),
             updatedAt: new Date(),
@@ -225,19 +233,6 @@ export class EmailsRepository {
         return campaign;
     }
 
-    async markCampaignCompleted(campaignId: string) {
-        const [campaign] = await db
-            .update(campaigns)
-            .set({
-            status: "completed",
-            updatedAt: new Date(),
-            })
-            .where(eq(campaigns.id, campaignId))
-            .returning();
-
-        return campaign;
-    }
-
     async completeCampaignIfFinished(campaignId: string) {
         const [campaign] = await db
             .select()
@@ -267,11 +262,116 @@ export class EmailsRepository {
         return campaign;
     }
 
-    async findScheduledEmails() {
+    async findEmailsToRecover() {
         return db
             .select()
             .from(emails)
-            .where(eq(emails.status, "scheduled"));
+            .where(inArray(emails.status, ["scheduled", "processing"]));
+    }
+
+    async listUserEmails(
+        userId: string,
+        statuses: EmailStatus[],
+        page: number,
+        limit: number,
+    ) {
+        const where = and(
+            eq(campaigns.userId, userId),
+            inArray(emails.status, statuses),
+        );
+
+        const isSentList = statuses.includes("sent");
+
+        const [items, [{ total }]] = await Promise.all([
+            db
+            .select({
+            id: emails.id,
+            recipient: emails.recipient,
+            subject: emails.subject,
+            bodyPreview: sql<string>`left(${emails.body}, 200)`,
+            status: emails.status,
+            scheduledAt: emails.scheduledAt,
+            sentAt: emails.sentAt,
+            error: emails.error,
+            })
+            .from(emails)
+            .innerJoin(campaigns, eq(emails.campaignId, campaigns.id))
+            .where(where)
+            .orderBy(
+            isSentList
+                ? desc(sql`coalesce(${emails.sentAt}, ${emails.updatedAt})`)
+                : asc(emails.scheduledAt),
+            )
+            .limit(limit)
+            .offset((page - 1) * limit),
+            db
+            .select({ total: count() })
+            .from(emails)
+            .innerJoin(campaigns, eq(emails.campaignId, campaigns.id))
+            .where(where),
+        ]);
+
+        return {
+            items,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+        };
+    }
+
+    async findUserEmail(userId: string, emailId: string) {
+        const [email] = await db
+            .select({
+            id: emails.id,
+            recipient: emails.recipient,
+            subject: emails.subject,
+            body: emails.body,
+            status: emails.status,
+            scheduledAt: emails.scheduledAt,
+            sentAt: emails.sentAt,
+            error: emails.error,
+            senderName: senders.displayName,
+            senderEmail: senders.email,
+            })
+            .from(emails)
+            .innerJoin(campaigns, eq(emails.campaignId, campaigns.id))
+            .innerJoin(senders, eq(emails.senderId, senders.id))
+            .where(and(eq(emails.id, emailId), eq(campaigns.userId, userId)))
+            .limit(1);
+
+        if (!email) {
+            return undefined;
+        }
+
+        const [sentEvent] = await db
+            .select({ metadata: emailEvents.metadata })
+            .from(emailEvents)
+            .where(and(eq(emailEvents.emailId, emailId), eq(emailEvents.eventType, "sent")))
+            .limit(1);
+
+        const metadata = sentEvent?.metadata as { previewUrl?: string } | null | undefined;
+
+        return { ...email, previewUrl: metadata?.previewUrl ?? null };
+    }
+
+    async findAllEmailsForSearchIndex() {
+        return db
+            .select({
+            id: emails.id,
+            userId: campaigns.userId,
+            campaignId: emails.campaignId,
+            senderId: emails.senderId,
+            recipient: emails.recipient,
+            subject: emails.subject,
+            body: emails.body,
+            status: emails.status,
+            scheduledAt: emails.scheduledAt,
+            sentAt: emails.sentAt,
+            createdAt: emails.createdAt,
+            })
+            .from(emails)
+            .innerJoin(campaigns, eq(emails.campaignId, campaigns.id));
     }
 }
 
