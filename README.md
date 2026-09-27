@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="frontend/public/logo-dark.svg">
+    <img src="frontend/public/logo.svg" alt="ReachInbox" width="300">
+  </picture>
+</p>
+
 # ReachInbox Scheduler
 
 A full-stack email job scheduler and dashboard, built for the ReachInbox.ai / Outbox Labs Software Development Intern assignment.
@@ -5,6 +12,10 @@ A full-stack email job scheduler and dashboard, built for the ReachInbox.ai / Ou
 You sign in with Google, upload a list of leads, write an email, and pick a start time. The backend stores every email in PostgreSQL, schedules each one as a BullMQ delayed job in Redis, and sends them through Ethereal SMTP. Sends respect a per-campaign delay and a Redis-backed hourly limit. When the limit is hit, the email moves to the next hour and a Slack alert is posted. Sent and scheduled emails can be searched with Elasticsearch.
 
 No cron is used anywhere. Scheduling is done only with BullMQ delayed jobs.
+
+**Live demo:** https://77-112-80-136.sslip.io
+
+> The Google app isn't verified, so Google shows a warning on first login. Click **Advanced → Go to ReachInbox Scheduler** to continue. Emails are sent through Ethereal (a test SMTP service), so they appear in the app's **Sent** tab with an **Open in Ethereal** link rather than in real inboxes.
 
 ---
 
@@ -15,6 +26,7 @@ No cron is used anywhere. Scheduling is done only with BullMQ delayed jobs.
 - [Architecture](#architecture)
 - [Getting started](#getting-started)
 - [Environment variables](#environment-variables)
+- [Production deployment (Docker)](#production-deployment-docker)
 - [Using the app](#using-the-app)
 - [How scheduling works](#how-scheduling-works)
 - [Delay between emails](#delay-between-emails)
@@ -166,6 +178,7 @@ The Vite dev server proxies `/api` to `http://localhost:4000`. The browser there
 | http://localhost:5173 | Dashboard |
 | http://localhost:4000/health | Health check |
 | http://localhost:4000/admin/queues | Bull Board (live queue view) |
+| http://localhost:5173/privacy.html | Privacy policy (needed to publish the Google app) |
 
 ### Scripts
 
@@ -207,6 +220,86 @@ The Vite dev server proxies `/api` to `http://localhost:4000`. The browser there
 | Variable | Default | Description |
 | --- | --- | --- |
 | `VITE_API_URL` | empty | API base URL; leave empty to use the Vite proxy |
+
+---
+
+## Production deployment (Docker)
+
+The live demo runs on a single AWS EC2 instance (Ubuntu, t3.medium) with Docker Compose. PostgreSQL stays on Neon.
+
+```text
+Internet ──► Caddy (:80/:443, automatic HTTPS)
+               ├─ /               → React build (static files)
+               ├─ /api/*          → backend:4000
+               └─ /admin/queues   → backend:4000 (password protected)
+             backend   Express API + BullMQ worker
+             redis     jobs + rate-limit counters (AOF on a volume)
+             elasticsearch
+```
+
+The frontend and the API share one domain, so session cookies work without any CORS setup.
+
+| File | Purpose |
+| --- | --- |
+| `docker-compose.prod.yml` | web (Caddy), backend, redis, elasticsearch, plus a one-off `migrate` task |
+| `backend/Dockerfile` | Builds the API and worker image |
+| `frontend/Dockerfile` | Builds the React app into a Caddy image |
+| `frontend/Caddyfile` | HTTPS, routing, Bull Board basic auth |
+
+### Steps
+
+1. **Server:** launch an Ubuntu instance with at least 4 GB RAM (Elasticsearch needs it). Open ports 22, 80 and 443, and attach a fixed IP.
+2. **Domain:** point a domain at the server's IP. For a quick test without buying one, `<ip-with-dashes>.sslip.io` works (e.g. `77-112-80-136.sslip.io`).
+3. **Install Docker:**
+   ```bash
+   curl -fsSL https://get.docker.com | sudo sh
+   sudo usermod -aG docker $USER
+   echo "vm.max_map_count=262144" | sudo tee /etc/sysctl.d/99-elasticsearch.conf && sudo sysctl --system
+   ```
+   Log out and back in so the Docker group change applies.
+4. **Get the code:**
+   ```bash
+   git clone <repo-url> reachinbox && cd reachinbox
+   ```
+5. **Backend settings:** create `backend/.env.production` with the variables from [Environment variables](#environment-variables). Use your HTTPS domain for the URLs:
+   ```env
+   FRONTEND_URL=https://YOUR_DOMAIN
+   GOOGLE_REDIRECT_URI=https://YOUR_DOMAIN/api/auth/google/callback
+   SLACK_REDIRECT_URI=https://YOUR_DOMAIN/api/slack/oauth/callback
+   ```
+   `REDIS_URL`, `ELASTICSEARCH_URL` and `NODE_ENV` are set by the compose file.
+6. **Domain and Bull Board password:** generate a password hash:
+   ```bash
+   docker run --rm caddy:2-alpine caddy hash-password --plaintext 'your-password'
+   ```
+   Then create `.env` in the repo root:
+   ```env
+   DOMAIN=YOUR_DOMAIN
+   BULL_BOARD_USER=admin
+   BULL_BOARD_PASSWORD_HASH='<hash>'
+   ```
+   Keep the single quotes; the hash contains `$` characters.
+7. **Migrate and start:**
+   ```bash
+   docker compose -f docker-compose.prod.yml run --rm migrate
+   docker compose -f docker-compose.prod.yml up -d --build
+   ```
+   Caddy gets a Let's Encrypt certificate on the first request.
+8. **OAuth apps:** add `https://YOUR_DOMAIN/api/auth/google/callback` to Google and `https://YOUR_DOMAIN/api/slack/oauth/callback` to Slack. For Google, also add `https://YOUR_DOMAIN` as a JavaScript origin, set the privacy policy link to `https://YOUR_DOMAIN/privacy.html`, and publish the app so any Google account can sign in.
+
+### Operating it
+
+| Task | Command |
+| --- | --- |
+| Deploy new code | `git pull && docker compose -f docker-compose.prod.yml up -d --build` |
+| Apply env changes | `docker compose -f docker-compose.prod.yml up -d --force-recreate backend` |
+| Logs | `docker compose -f docker-compose.prod.yml logs -f backend` |
+| Restart test | `docker compose -f docker-compose.prod.yml restart backend` |
+| Status | `docker compose -f docker-compose.prod.yml ps` |
+
+Every container uses `restart: unless-stopped`, so it comes back after a server reboot. Redis, Elasticsearch and certificate data live in Docker volumes.
+
+Don't run a local backend against the same database as production. Both workers would pick up the same pending emails.
 
 ---
 
@@ -626,9 +719,11 @@ Code organisation:
 
 ```text
 reachinbox-scheduler/
-├── docker-compose.yml              Redis + Elasticsearch
+├── docker-compose.yml              Redis + Elasticsearch for local development
+├── docker-compose.prod.yml         full production stack (Caddy, backend, Redis, Elasticsearch)
 ├── sample-leads.csv                example lead list for Upload List
 ├── backend/
+│   ├── Dockerfile
 │   ├── drizzle.config.ts
 │   └── src/
 │       ├── server.ts               startup: recovery, search index, listen
@@ -646,6 +741,8 @@ reachinbox-scheduler/
 │       ├── smtp/                   Ethereal transporter
 │       └── workers/                email worker
 └── frontend/
+    ├── Dockerfile / Caddyfile      production image and web server
+    ├── public/                     favicon, logos, privacy.html
     └── src/
         ├── App.tsx                 session check → Login or Dashboard
         ├── lib/                    api client, lead parser
@@ -701,7 +798,7 @@ Scenarios verified against the running app:
 - **Per-campaign limits.** The hourly limit and delay are set per campaign in the UI. They are not global or per-sender environment variables.
 - **Fixed hour windows** instead of a sliding 60-minute window.
 - **Recovery runs at startup only.** Missing jobs are not re-checked while the server runs.
-- **Bull Board has no login.** It should be protected before deployment.
+- **Bull Board has no login in local development.** In production, Caddy protects it with a username and password.
 - **Attachments are stored in PostgreSQL** (`bytea`). This is fine for the 10 MB limit; object storage (S3 or similar) would suit larger files.
 - **Stateless sessions.** Logout clears the cookie, but a copied token stays valid until it expires (7 days).
 - **Figma differences.** The email/password login form is left out because only Google login is implemented. The rich-text toolbar is left out because bodies are plain text. Star, archive and delete icons are left out because they have no backend.
