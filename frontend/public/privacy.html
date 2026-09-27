@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Privacy Policy · ReachInbox Scheduler</title>
+    <style>
+      body { margin: 0; font-family: Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #1f2328; background: #fff; line-height: 1.65; }
+      main { max-width: 720px; margin: 0 auto; padding: 48px 20px 80px; }
+      header { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+      header img { width: 40px; height: 40px; }
+      h1 { font-size: 30px; margin: 0 0 4px; letter-spacing: -0.5px; }
+      h2 { font-size: 19px; margin: 32px 0 8px; }
+      p, li { font-size: 15px; }
+      .muted { color: #6b7280; font-size: 14px; }
+      a { color: #2f7f3a; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="/favicon.svg" alt="" />
+        <strong>ReachInbox Scheduler</strong>
+      </header>
+
+      <h1>Privacy Policy</h1>
+      <p class="muted">Last updated: 28 September 2026</p>
+
+      <p>
+        ReachInbox Scheduler is a demo project built for the ReachInbox / Outbox Labs internship assignment.
+        This page explains what data the app uses and why.
+      </p>
+
+      <h2>Information we collect</h2>
+      <ul>
+        <li><strong>Google account:</strong> when you sign in with Google, we receive your name, email address and profile picture. We use them only to create your account and show who is logged in.</li>
+        <li><strong>Emails you schedule:</strong> the sender, recipients, subject, body and any attachments you add, plus their status and send times.</li>
+        <li><strong>Slack (optional):</strong> if you connect Slack, we store your workspace name, the channel you choose and an access token, used only to post rate-limit alerts to that channel.</li>
+      </ul>
+
+      <h2>How emails are sent</h2>
+      <p>
+        All emails are sent through <strong>Ethereal</strong>, a fake SMTP testing service. Messages are captured for preview
+        and are <strong>never delivered to real inboxes</strong>.
+      </p>
+
+      <h2>How we use and store data</h2>
+      <ul>
+        <li>Data is used only to run the app's features: scheduling, sending, search and Slack alerts.</li>
+        <li>It is stored in a PostgreSQL database, a Redis queue and an Elasticsearch search index on servers used for this project.</li>
+        <li>We do not sell, rent or share your data with anyone, and we do not use it for advertising.</li>
+        <li>We only request basic Google scopes (email and profile). We cannot read your Gmail or Google Drive.</li>
+      </ul>
+
+      <h2>Cookies</h2>
+      <p>
+        We use a single secure, http-only session cookie to keep you signed in, and short-lived cookies to protect the
+        Google and Slack sign-in flows. There are no tracking or analytics cookies.
+      </p>
+
+      <h2>Your choices</h2>
+      <ul>
+        <li>You can disconnect Slack at any time from the dashboard.</li>
+        <li>You can revoke the app's Google access at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+        <li>To delete your account and data, email us and we will remove it.</li>
+      </ul>
+
+      <h2>Contact</h2>
+      <p>Questions or deletion requests: <a href="mailto:ragetitans7007@gmail.com">ragetitans7007@gmail.com</a></p>
+
+      <p class="muted"><a href="/">← Back to ReachInbox Scheduler</a></p>
+    </main>
+  </body>
+</html>
