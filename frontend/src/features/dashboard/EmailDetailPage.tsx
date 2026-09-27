@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, type EmailDetail, type User } from "../../lib/api";
+import { api, attachmentUrl, type EmailDetail, type User } from "../../lib/api";
+import { AttachmentCard } from "../../components/AttachmentCard";
 import { Avatar } from "../../components/Avatar";
 import { StatusBadge } from "../../components/Badge";
 import { ErrorState, LoadingState } from "../../components/States";
@@ -62,6 +63,25 @@ export function EmailDetailPage({ emailId, user, onBack }: EmailDetailPageProps)
           )}
 
           <p className="mt-6 text-[15px] leading-7 whitespace-pre-wrap md:ml-13">{email.body}</p>
+
+          {email.attachments.length > 0 && (
+            <div className="mt-8 flex flex-wrap gap-3 md:ml-13">
+              {email.attachments.map((attachment) => {
+                const url = attachmentUrl(email.id, attachment.id);
+                const isImage = ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(attachment.contentType);
+
+                return (
+                  <AttachmentCard
+                    key={attachment.id}
+                    name={attachment.filename}
+                    size={attachment.size}
+                    imageUrl={isImage ? url : null}
+                    href={url}
+                  />
+                );
+              })}
+            </div>
+          )}
 
           {email.previewUrl && (
             <p className="mt-8 text-sm text-muted md:ml-13">

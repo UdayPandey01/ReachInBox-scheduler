@@ -103,6 +103,19 @@ export const CalendarIcon = (props: IconProps) => (
   </Icon>
 );
 
+export const PaperclipIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7" />
+  </Icon>
+);
+
+export const FileIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M14 3H6v18h12V7z" />
+    <path d="M14 3v4h4" />
+  </Icon>
+);
+
 export const CloseIcon = (props: IconProps) => (
   <Icon {...props}>
     <path d="M6 6l12 12M18 6 6 18" />

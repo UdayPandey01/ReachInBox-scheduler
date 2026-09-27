@@ -31,6 +31,20 @@ export type EmailDetail = Omit<EmailRow, "bodyPreview"> & {
   senderName: string;
   senderEmail: string;
   previewUrl: string | null;
+  attachments: AttachmentInfo[];
+};
+
+export type AttachmentInfo = {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+};
+
+export type AttachmentUpload = {
+  filename: string;
+  contentType: string;
+  contentBase64: string;
 };
 
 export type Page<T> = {
@@ -58,6 +72,7 @@ export type SchedulePayload = {
   scheduledAt: string;
   delayMs: number;
   hourlyLimit: number;
+  attachments: AttachmentUpload[];
 };
 
 export type ScheduleResult = {
@@ -80,6 +95,7 @@ function errorMessage(status: number, serverMessage?: string) {
   if (status === 400) return serverMessage ?? "Please check the details and try again.";
   if (status === 401) return "Your session has expired. Please sign in again.";
   if (status === 404) return serverMessage ?? "We couldn't find what you were looking for.";
+  if (status === 413) return serverMessage ?? "That request is too large.";
   return "Something went wrong on our side. Please try again in a moment.";
 }
 
@@ -123,6 +139,10 @@ function toQuery(params: Record<string, string | number | undefined>) {
   }
 
   return query.toString();
+}
+
+export function attachmentUrl(emailId: string, attachmentId: string) {
+  return `${API_URL}/api/emails/${emailId}/attachments/${attachmentId}`;
 }
 
 export const googleLoginUrl = `${API_URL}/api/auth/google`;

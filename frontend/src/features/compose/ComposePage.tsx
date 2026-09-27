@@ -1,15 +1,44 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { api, type Sender } from "../../lib/api";
+import { api, type AttachmentUpload, type Sender } from "../../lib/api";
 import { parseLeads } from "../../lib/leads";
+import { AttachmentCard, formatBytes } from "../../components/AttachmentCard";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Field";
 import { Modal } from "../../components/Modal";
 import { LoadingState } from "../../components/States";
-import { ArrowLeftIcon, CalendarIcon, ChevronDownIcon, ClockIcon, CloseIcon, UploadIcon } from "../../components/icons";
+import { ArrowLeftIcon, CalendarIcon, ChevronDownIcon, ClockIcon, CloseIcon, PaperclipIcon, UploadIcon } from "../../components/icons";
 
 const ADD_SENDER = "add-sender";
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const VISIBLE_CHIPS = 3;
+const MAX_ATTACHMENTS = 10;
+const MAX_ATTACHMENTS_BYTES = 10 * 1024 * 1024;
+const PREVIEWABLE_IMAGES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+type PendingAttachment = {
+  id: string;
+  file: File;
+  imageUrl: string | null;
+};
+
+function readAsBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(new Error(`Couldn't read ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function toAttachmentUploads(attachments: PendingAttachment[]): Promise<AttachmentUpload[]> {
+  return Promise.all(
+    attachments.map(async ({ file }) => ({
+      filename: file.name,
+      contentType: file.type || "application/octet-stream",
+      contentBase64: await readAsBase64(file),
+    })),
+  );
+}
 
 function toLocalInputValue(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -43,6 +72,7 @@ type ComposePageProps = {
 
 export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   const [senders, setSenders] = useState<Sender[] | null>(null);
   const [sendersError, setSendersError] = useState<string | null>(null);
@@ -56,6 +86,9 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
   const [delaySeconds, setDelaySeconds] = useState("");
   const [hourlyLimit, setHourlyLimit] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
 
   const [sendLaterOpen, setSendLaterOpen] = useState(false);
   const [sendAt, setSendAt] = useState(() => toLocalInputValue(new Date()));
@@ -77,6 +110,41 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
       })
       .catch((err: Error) => setSendersError(err.message));
   }, []);
+
+  useEffect(() => {
+    return () => {
+      for (const attachment of attachmentsRef.current) {
+        if (attachment.imageUrl) URL.revokeObjectURL(attachment.imageUrl);
+      }
+    };
+  }, []);
+
+  function addAttachments(files: FileList) {
+    const added = [...files].map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      imageUrl: PREVIEWABLE_IMAGES.includes(file.type) ? URL.createObjectURL(file) : null,
+    }));
+    const next = [...attachments, ...added];
+    const totalBytes = next.reduce((total, attachment) => total + attachment.file.size, 0);
+
+    if (next.length > MAX_ATTACHMENTS || totalBytes > MAX_ATTACHMENTS_BYTES) {
+      for (const attachment of added) {
+        if (attachment.imageUrl) URL.revokeObjectURL(attachment.imageUrl);
+      }
+      setFormError(`Attach up to ${MAX_ATTACHMENTS} files, 10 MB in total.`);
+      return;
+    }
+
+    setAttachments(next);
+    setFormError(null);
+  }
+
+  function removeAttachment(id: string) {
+    const attachment = attachments.find((item) => item.id === id);
+    if (attachment?.imageUrl) URL.revokeObjectURL(attachment.imageUrl);
+    setAttachments((current) => current.filter((item) => item.id !== id));
+  }
 
   function addRecipients(text: string) {
     const parsed = parseLeads(text);
@@ -147,6 +215,8 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
     setScheduleError(null);
 
     try {
+      const attachmentUploads = await toAttachmentUploads(attachments);
+
       const result = await api.scheduleEmails({
         senderId,
         subject: subject.trim(),
@@ -155,6 +225,7 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
         scheduledAt: scheduledAt.toISOString(),
         delayMs: Number(delaySeconds || 0) * 1000,
         hourlyLimit: Number(hourlyLimit),
+        attachments: attachmentUploads,
       });
 
       onScheduled(result.totalEmails);
@@ -193,6 +264,31 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
           <ArrowLeftIcon width={22} height={22} />
         </button>
         <h1 className="flex-1 text-xl md:text-2xl">Compose New Email</h1>
+        <button
+          type="button"
+          onClick={() => attachmentInputRef.current?.click()}
+          aria-label={`Attach files (${attachments.length} attached)`}
+          title="Attach files"
+          className={`relative rounded-full p-2 hover:bg-field ${attachments.length > 0 ? "text-brand" : "text-muted"}`}
+        >
+          <PaperclipIcon width={22} height={22} />
+          {attachments.length > 0 && (
+            <span className="absolute right-0.5 bottom-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-field px-1 text-[10px] font-medium text-ink">
+              {attachments.length}
+            </span>
+          )}
+        </button>
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          aria-label="Attachments"
+          onChange={(event) => {
+            if (event.target.files?.length) addAttachments(event.target.files);
+            event.target.value = "";
+          }}
+        />
         <button
           type="button"
           onClick={() => openSendLater()}
@@ -250,6 +346,7 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
 
               <p className="mt-2 text-xs text-muted">
                 {recipients.length} emails · {delaySeconds || 0}s apart · max {hourlyLimit}/hour
+                {attachments.length > 0 && ` · ${attachments.length} attachment${attachments.length === 1 ? "" : "s"}`}
               </p>
 
               {scheduleError && (
@@ -428,6 +525,26 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
             rows={18}
             className="w-full resize-y rounded-xl bg-[#f9f9f9] p-5 text-sm outline-none placeholder:text-[#b0b4ba] focus:ring-2 focus:ring-brand/20"
           />
+
+          {attachments.length > 0 && (
+            <div>
+              <div className="flex flex-wrap gap-3">
+                {attachments.map((attachment) => (
+                  <AttachmentCard
+                    key={attachment.id}
+                    name={attachment.file.name}
+                    size={attachment.file.size}
+                    imageUrl={attachment.imageUrl}
+                    onRemove={() => removeAttachment(attachment.id)}
+                  />
+                ))}
+              </div>
+              <p className="pt-2 text-xs text-muted">
+                {attachments.length} of {MAX_ATTACHMENTS} files ·{" "}
+                {formatBytes(attachments.reduce((total, attachment) => total + attachment.file.size, 0))} of 10 MB
+              </p>
+            </div>
+          )}
 
           {formError && (
             <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
