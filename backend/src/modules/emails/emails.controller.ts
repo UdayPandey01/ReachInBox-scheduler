@@ -6,6 +6,14 @@ import { listEmailsQuerySchema, scheduledEmailSchema } from "./emails.schema";
 import { emailsService } from "./emails.service";
 import { emailsRepository } from "./emails.repository";
 
+const INLINE_CONTENT_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+]);
+
 export async function scheduleEmail(req: Request, res: Response) {
   const input = scheduledEmailSchema.parse(req.body);
 
@@ -48,4 +56,33 @@ export async function getEmail(req: Request, res: Response) {
   }
 
   res.json({ email });
+}
+
+export async function downloadAttachment(req: Request, res: Response) {
+  const emailId = z.uuid().parse(req.params.id);
+  const attachmentId = z.uuid().parse(req.params.attachmentId);
+
+  const email = await emailsRepository.findUserEmail(req.userId, emailId);
+
+  if (!email) {
+    throw new HttpError(404, "Email not found");
+  }
+
+  const attachment = await emailsRepository.findAttachment(email.campaignId, attachmentId);
+
+  if (!attachment) {
+    throw new HttpError(404, "Attachment not found");
+  }
+
+  const showInline = INLINE_CONTENT_TYPES.has(attachment.contentType);
+
+  res.setHeader("Content-Type", showInline ? attachment.contentType : "application/octet-stream");
+  res.setHeader("Content-Length", attachment.size);
+  res.setHeader(
+    "Content-Disposition",
+    `${showInline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`,
+  );
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
+  res.send(attachment.content);
 }

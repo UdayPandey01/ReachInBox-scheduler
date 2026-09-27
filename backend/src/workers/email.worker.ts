@@ -112,6 +112,8 @@ const worker = new Worker(
         );
     }
 
+    const attachments = await emailsRepository.findCampaignAttachments(email.campaignId);
+
     try{
     const transporter = await getEtherealTransporter();
 
@@ -120,6 +122,7 @@ const worker = new Worker(
         to: email.recipient,
         subject: email.subject,
         text: email.body,
+        attachments,
     })
 
     const previewUrl = nodemailer.getTestMessageUrl(info) || null;

@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../config/db";
-import { campaigns, emailEvents, emails, senders } from "../../db/schema";
+import { campaignAttachments, campaigns, emailEvents, emails, senders } from "../../db/schema";
 import type { ScheduleEmailInput } from "./emails.schema";
 import type { EmailEventType, EmailStatus } from "../../db/schema";
 
@@ -47,6 +47,15 @@ export class EmailsRepository {
             .insert(emails)
             .values(emailValues)
             .returning();
+
+        if (input.attachments.length > 0) {
+            await tx.insert(campaignAttachments).values(
+                input.attachments.map((attachment) => ({
+                ...attachment,
+                campaignId: campaign.id,
+                })),
+            );
+        }
 
         await tx.insert(emailEvents).values(
             emailsInserted.map((email) => ({
@@ -331,6 +340,7 @@ export class EmailsRepository {
             scheduledAt: emails.scheduledAt,
             sentAt: emails.sentAt,
             error: emails.error,
+            campaignId: emails.campaignId,
             senderName: senders.displayName,
             senderEmail: senders.email,
             })
@@ -352,7 +362,45 @@ export class EmailsRepository {
 
         const metadata = sentEvent?.metadata as { previewUrl?: string } | null | undefined;
 
-        return { ...email, previewUrl: metadata?.previewUrl ?? null };
+        const attachments = await db
+            .select({
+            id: campaignAttachments.id,
+            filename: campaignAttachments.filename,
+            contentType: campaignAttachments.contentType,
+            size: campaignAttachments.size,
+            })
+            .from(campaignAttachments)
+            .where(eq(campaignAttachments.campaignId, email.campaignId))
+            .orderBy(asc(campaignAttachments.createdAt));
+
+        return { ...email, previewUrl: metadata?.previewUrl ?? null, attachments };
+    }
+
+    async findCampaignAttachments(campaignId: string) {
+        return db
+            .select({
+            filename: campaignAttachments.filename,
+            contentType: campaignAttachments.contentType,
+            content: campaignAttachments.content,
+            })
+            .from(campaignAttachments)
+            .where(eq(campaignAttachments.campaignId, campaignId))
+            .orderBy(asc(campaignAttachments.createdAt));
+    }
+
+    async findAttachment(campaignId: string, attachmentId: string) {
+        const [attachment] = await db
+            .select()
+            .from(campaignAttachments)
+            .where(
+            and(
+                eq(campaignAttachments.id, attachmentId),
+                eq(campaignAttachments.campaignId, campaignId),
+            ),
+            )
+            .limit(1);
+
+        return attachment;
     }
 
     async findAllEmailsForSearchIndex() {

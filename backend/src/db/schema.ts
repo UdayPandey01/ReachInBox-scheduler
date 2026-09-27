@@ -10,7 +10,14 @@ import {
   jsonb,
   uniqueIndex,
   index,
+  customType,
 } from "drizzle-orm/pg-core";
+
+const bytea = customType<{ data: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 export const campaignStatusEnum = pgEnum("campaign_status", [
   "draft",
@@ -182,6 +189,38 @@ export const campaigns = pgTable(
 
     startTimeIndex: index("campaigns_start_time_idx").on(
       table.startTime,
+    ),
+  }),
+);
+
+export const campaignAttachments = pgTable(
+  "campaign_attachments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, {
+        onDelete: "cascade",
+      }),
+
+    filename: varchar("filename", { length: 255 }).notNull(),
+
+    contentType: varchar("content_type", { length: 255 }).notNull(),
+
+    size: integer("size").notNull(),
+
+    content: bytea("content").notNull(),
+
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    campaignIndex: index("campaign_attachments_campaign_idx").on(
+      table.campaignId,
     ),
   }),
 );
