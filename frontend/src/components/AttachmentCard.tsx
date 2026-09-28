@@ -18,9 +18,9 @@ export function AttachmentCard({ name, size, imageUrl, href, onRemove }: Attachm
   const content = (
     <>
       {imageUrl ? (
-        <img src={imageUrl} alt="" className="h-28 w-full object-cover" />
+        <img src={imageUrl} alt="" className="h-24 w-full object-cover sm:h-28" />
       ) : (
-        <span className="flex h-28 w-full items-center justify-center bg-field text-muted">
+        <span className="flex h-24 w-full items-center justify-center bg-field text-muted sm:h-28">
           <FileIcon width={36} height={36} strokeWidth={1.4} />
         </span>
       )}
@@ -32,7 +32,7 @@ export function AttachmentCard({ name, size, imageUrl, href, onRemove }: Attachm
   );
 
   return (
-    <div className="relative w-48 overflow-hidden rounded-lg border border-line bg-white">
+    <div className="relative w-[calc(50%-0.375rem)] overflow-hidden rounded-lg border border-line bg-white sm:w-48">
       {href ? (
         <a href={href} target="_blank" rel="noreferrer" className="block hover:bg-[#fafafa]" title={`Open ${name}`}>
           {content}

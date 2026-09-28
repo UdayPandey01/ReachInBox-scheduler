@@ -4,7 +4,8 @@ import { Button } from "../../components/Button";
 import { Pagination } from "../../components/Pagination";
 import { EmptyState, ErrorState, LoadingState } from "../../components/States";
 import { Toast, type ToastMessage } from "../../components/Toast";
-import { FilterIcon, RefreshIcon, SearchIcon } from "../../components/icons";
+import { Logo } from "../../components/Logo";
+import { FilterIcon, MenuIcon, RefreshIcon, SearchIcon } from "../../components/icons";
 import { ComposePage } from "../compose/ComposePage";
 import { EmailDetailPage } from "./EmailDetailPage";
 import { EmailList } from "./EmailList";
@@ -48,6 +49,7 @@ export function DashboardPage({ user, onLoggedOut }: DashboardPageProps) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [reloadKey, setReloadKey] = useState(0);
   const [emails, setEmails] = useState<Page<EmailRow> | null>(null);
@@ -57,6 +59,17 @@ export function DashboardPage({ user, onLoggedOut }: DashboardPageProps) {
   const [toast, setToast] = useState<ToastMessage | null>(readSlackResultFromUrl);
 
   const dismissToast = useCallback(() => setToast(null), []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [menuOpen]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -104,6 +117,7 @@ export function DashboardPage({ user, onLoggedOut }: DashboardPageProps) {
 
   function openTab(nextTab: EmailTab) {
     if (nextTab !== tab) setEmails(null);
+    setMenuOpen(false);
     setView({ name: "list" });
     setTab(nextTab);
     setStatus("");
@@ -152,20 +166,79 @@ export function DashboardPage({ user, onLoggedOut }: DashboardPageProps) {
   const filtering = Boolean(query || status);
 
   return (
-    <div className="flex min-h-screen flex-col bg-white md:flex-row">
-      <Sidebar
-        user={user}
-        tab={tab}
-        counts={counts}
-        onTabChange={openTab}
-        onCompose={() => setView({ name: "compose" })}
-        onLogout={logout}
-        onToast={setToast}
-      />
+    <div className="min-h-screen bg-white lg:flex">
+      <header
+        className="sticky z-30 flex items-center gap-3 border-b border-line bg-white/95 px-3 py-2.5 backdrop-blur lg:hidden"
+        style={{ top: "env(safe-area-inset-top, 0px)" }}
+      >
+        <button
+          type="button"
+          onClick={() => setMenuOpen(true)}
+          aria-label="Open menu"
+          aria-expanded={menuOpen}
+          className="rounded-full p-2 text-ink hover:bg-field"
+        >
+          <MenuIcon width={22} height={22} />
+        </button>
+        <Logo />
+        <button
+          type="button"
+          onClick={() => setView({ name: "compose" })}
+          className="ml-auto rounded-full border border-brand px-4 py-1.5 text-sm font-medium text-brand hover:bg-brand-soft"
+        >
+          Compose
+        </button>
+      </header>
 
-      <main className="min-w-0 flex-1 px-3 pt-6 pb-8 md:pr-6 md:pl-4">
+      {menuOpen && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="fixed inset-0 z-40 bg-black/30 lg:hidden"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+
+      <div
+        className={`fixed inset-y-0 left-0 z-50 w-[280px] max-w-[85vw] bg-white shadow-xl transition-[transform,visibility] duration-200 lg:visible lg:static lg:z-auto lg:w-auto lg:max-w-none lg:shrink-0 lg:translate-x-0 lg:shadow-none ${
+          menuOpen ? "visible translate-x-0" : "invisible -translate-x-full"
+        }`}
+      >
+        <Sidebar
+          user={user}
+          tab={tab}
+          counts={counts}
+          onTabChange={openTab}
+          onCompose={() => {
+            setMenuOpen(false);
+            setView({ name: "compose" });
+          }}
+          onLogout={logout}
+          onToast={setToast}
+        />
+      </div>
+
+      <main className="min-w-0 flex-1 px-3 pt-3 pb-8 sm:px-4 lg:pt-6 lg:pr-6 lg:pl-4">
+        <div className="mb-3 flex rounded-xl bg-field p-1 lg:hidden" role="tablist" aria-label="Email folders">
+          {(["scheduled", "sent"] as const).map((item) => (
+            <button
+              key={item}
+              type="button"
+              role="tab"
+              aria-selected={tab === item}
+              onClick={() => openTab(item)}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm capitalize transition-colors ${
+                tab === item ? "bg-white font-semibold text-ink shadow-sm" : "text-muted"
+              }`}
+            >
+              {item}
+              <span className="text-xs font-normal text-muted">{counts[item] ?? ""}</span>
+            </button>
+          ))}
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
-          <label className="relative min-w-0 flex-1 basis-60 md:max-w-[860px]">
+          <label className="relative min-w-0 flex-1 basis-56 lg:max-w-[860px]">
             <span className="sr-only">Search emails</span>
             <SearchIcon className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-muted" />
             <input
@@ -213,7 +286,7 @@ export function DashboardPage({ user, onLoggedOut }: DashboardPageProps) {
           </button>
 
           {emails && (
-            <div className="ml-auto">
+            <div className="ml-auto shrink-0">
               <Pagination
                 page={emails.page}
                 limit={emails.limit}

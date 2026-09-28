@@ -259,11 +259,14 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
 
   return (
     <div className="min-h-screen bg-white">
-      <header className="relative flex items-center gap-3 px-4 py-4 md:px-6">
+      <header
+        className="sticky z-30 flex items-center gap-1.5 bg-white/95 px-2 py-3 backdrop-blur sm:gap-3 sm:px-4 sm:py-4 md:px-6"
+        style={{ top: "env(safe-area-inset-top, 0px)" }}
+      >
         <button type="button" onClick={onBack} aria-label="Back" className="rounded-full p-1.5 hover:bg-field">
           <ArrowLeftIcon width={22} height={22} />
         </button>
-        <h1 className="flex-1 text-xl md:text-2xl">Compose New Email</h1>
+        <h1 className="min-w-0 flex-1 truncate text-lg sm:text-xl md:text-2xl">Compose New Email</h1>
         <button
           type="button"
           onClick={() => attachmentInputRef.current?.click()}
@@ -293,14 +296,14 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
           type="button"
           onClick={() => openSendLater()}
           aria-label="Pick send time"
-          className="rounded-full p-2 text-brand hover:bg-brand-soft"
+          className="hidden rounded-full p-2 text-brand hover:bg-brand-soft sm:inline-flex"
         >
           <ClockIcon width={22} height={22} />
         </button>
         <button
           type="button"
           onClick={() => openSendLater()}
-          className="rounded-full border border-brand px-5 py-2 text-sm text-brand hover:bg-brand-soft"
+          className="shrink-0 rounded-full border border-brand px-4 py-2 text-sm whitespace-nowrap text-brand hover:bg-brand-soft sm:px-5"
         >
           Send Later
         </button>
@@ -316,7 +319,7 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
             <div
               role="dialog"
               aria-label="Send Later"
-              className="absolute top-full right-4 z-20 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-line bg-white p-5 shadow-xl"
+              className="absolute top-full right-2 z-20 max-h-[calc(100dvh-5rem)] w-[min(22rem,calc(100vw-1rem))] overflow-y-auto sm:right-4 rounded-lg border border-line bg-white p-5 shadow-xl"
             >
               <h2 className="text-base font-medium">Send Later</h2>
 
@@ -373,10 +376,10 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
       ) : !senders ? (
         <LoadingState label="Loading senders…" />
       ) : (
-        <form onSubmit={openSendLater} noValidate className="mx-auto flex max-w-[1330px] flex-col gap-5 px-4 pt-4 pb-12 md:pr-60 md:pl-60">
-          <div className="flex items-center gap-4">
-            <span className="w-16 shrink-0 text-sm">From</span>
-            <label className="relative">
+        <form onSubmit={openSendLater} noValidate className="mx-auto flex max-w-4xl flex-col gap-5 px-4 pt-2 pb-12 sm:px-6 sm:pt-4">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
+            <span className="shrink-0 text-sm text-muted sm:w-16 sm:text-ink">From</span>
+            <label className="relative max-w-full self-start sm:self-auto">
               <span className="sr-only">Sender</span>
               <select
                 value={senderId}
@@ -387,7 +390,7 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
                   }
                   setSenderId(event.target.value);
                 }}
-                className="max-w-[70vw] appearance-none truncate rounded-md bg-field py-2 pr-9 pl-3 text-sm outline-none focus:ring-2 focus:ring-brand/20"
+                className="w-full max-w-full appearance-none truncate rounded-md bg-field py-2 pr-9 pl-3 text-sm outline-none focus:ring-2 focus:ring-brand/20"
               >
                 {senders.length === 0 && <option value="">No senders yet</option>}
                 {senders.map((sender) => (
@@ -401,19 +404,19 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
             </label>
           </div>
 
-          <div className="flex items-start gap-4">
-            <span className="w-16 shrink-0 pt-2 text-sm">To</span>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-4">
+            <span className="shrink-0 text-sm text-muted sm:w-16 sm:pt-2 sm:text-ink">To</span>
             <div className="min-w-0 flex-1">
               <div className="flex items-start gap-3 border-b border-line py-1 focus-within:border-brand">
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                 {visibleRecipients.map((email) => (
-                  <span key={email} className="inline-flex items-center gap-1 rounded-full border border-brand bg-brand-soft px-2.5 py-0.5 text-sm">
-                    {email}
+                  <span key={email} className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-full border border-brand bg-brand-soft px-2.5 py-0.5 text-sm">
+                    <span className="truncate">{email}</span>
                     <button
                       type="button"
                       aria-label={`Remove ${email}`}
                       onClick={() => setRecipients((current) => current.filter((item) => item !== email))}
-                      className="text-muted hover:text-ink"
+                      className="shrink-0 text-muted hover:text-ink"
                     >
                       <CloseIcon width={12} height={12} />
                     </button>
@@ -439,7 +442,7 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
                   }}
                   placeholder={recipients.length === 0 ? "recipient@example.com" : ""}
                   aria-label="Recipients"
-                  className="min-w-40 flex-1 bg-transparent py-1 text-sm outline-none placeholder:text-[#b0b4ba]"
+                  className="min-w-32 flex-1 bg-transparent py-1 text-sm outline-none placeholder:text-[#b0b4ba]"
                 />
                 </div>
                 <button
@@ -448,7 +451,8 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
                   className="inline-flex shrink-0 items-center gap-1.5 py-1 text-sm whitespace-nowrap text-brand hover:text-brand-dark"
                 >
                   <UploadIcon width={16} height={16} />
-                  Upload List
+                  <span className="sm:hidden">Upload</span>
+                  <span className="hidden sm:inline">Upload List</span>
                 </button>
                 <input
                   ref={fileInputRef}
@@ -474,8 +478,8 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <label htmlFor="subject" className="w-16 shrink-0 text-sm">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
+            <label htmlFor="subject" className="shrink-0 text-sm text-muted sm:w-16 sm:text-ink">
               Subject
             </label>
             <input
@@ -488,9 +492,10 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
-            <label className="flex items-center gap-3 text-sm">
-              Delay between 2 emails
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center sm:gap-x-8 sm:gap-y-3">
+            <label className="flex flex-col gap-1.5 text-sm sm:flex-row sm:items-center sm:gap-3">
+              <span className="text-muted sm:text-ink">Delay between 2 emails</span>
+              <span className="flex items-center gap-2">
               <input
                 type="number"
                 min={0}
@@ -503,9 +508,10 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
               <span id="delay-unit" className="text-xs text-muted">
                 sec
               </span>
+              </span>
             </label>
-            <label className="flex items-center gap-3 text-sm">
-              Hourly Limit
+            <label className="flex flex-col gap-1.5 text-sm sm:flex-row sm:items-center sm:gap-3">
+              <span className="text-muted sm:text-ink">Hourly Limit</span>
               <input
                 type="number"
                 min={1}
@@ -523,7 +529,7 @@ export function ComposePage({ onBack, onScheduled }: ComposePageProps) {
             placeholder="Type Your Reply..."
             aria-label="Email body"
             rows={18}
-            className="w-full resize-y rounded-xl bg-[#f9f9f9] p-5 text-sm outline-none placeholder:text-[#b0b4ba] focus:ring-2 focus:ring-brand/20"
+            className="min-h-64 w-full resize-y rounded-xl bg-[#f9f9f9] p-4 sm:p-5 text-sm outline-none placeholder:text-[#b0b4ba] focus:ring-2 focus:ring-brand/20"
           />
 
           {attachments.length > 0 && (

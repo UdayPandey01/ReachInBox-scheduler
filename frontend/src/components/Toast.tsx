@@ -22,7 +22,8 @@ export function Toast({ toast, onDismiss }: { toast: ToastMessage | null; onDism
   return (
     <div
       role="status"
-      className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-3 text-sm shadow-lg ${toneClasses}`}
+      className={`fixed left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl px-5 py-3 text-center text-sm shadow-lg ${toneClasses}`}
+      style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}
     >
       {toast.text}
     </div>

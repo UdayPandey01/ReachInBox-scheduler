@@ -72,6 +72,12 @@ export const LogoutIcon = (props: IconProps) => (
   </Icon>
 );
 
+export const MenuIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  </Icon>
+);
+
 export const FilterIcon = (props: IconProps) => (
   <Icon {...props}>
     <path d="M4 5h16l-6 7.5V19l-4-2v-4.5z" />

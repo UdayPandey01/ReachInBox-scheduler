@@ -25,7 +25,7 @@ export function Sidebar({ user, tab, counts, onTabChange, onCompose, onLogout, o
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <aside className="flex flex-col gap-4 bg-white px-3 pt-6 pb-4 md:sticky md:top-0 md:h-screen md:w-[260px] md:shrink-0">
+    <aside className="flex h-full flex-col gap-4 overflow-y-auto bg-white px-3 pt-6 pb-4 lg:sticky lg:top-0 lg:h-screen lg:w-[260px] lg:shrink-0">
       <div className="px-3">
         <Logo />
       </div>
@@ -92,7 +92,7 @@ export function Sidebar({ user, tab, counts, onTabChange, onCompose, onLogout, o
         })}
       </nav>
 
-      <div className="md:mt-auto">
+      <div className="mt-auto">
         <SlackPanel onToast={onToast} />
       </div>
     </aside>

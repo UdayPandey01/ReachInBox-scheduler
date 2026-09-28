@@ -17,7 +17,7 @@ export function EmailList({ tab, emails, onOpen }: EmailListProps) {
             onClick={() => onOpen(email.id)}
             className="flex w-full flex-col gap-1.5 px-4 py-4 text-left text-sm transition-colors hover:bg-[#fafafa] md:flex-row md:items-center md:gap-4"
           >
-            <span className="shrink-0 truncate md:w-60">To: {email.recipient}</span>
+            <span className="min-w-0 shrink-0 truncate md:w-48 xl:w-60">To: {email.recipient}</span>
             <span className="flex min-w-0 flex-1 items-center gap-2">
               <StatusBadge status={email.status} scheduledAt={email.scheduledAt} />
               <span className="min-w-0 truncate">
